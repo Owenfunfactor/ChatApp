@@ -10,7 +10,12 @@ Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
+//User
 Route::post('register', [UserController::class, 'register']);
+Route::post('login', [UserController::class, 'login']);
+Route::patch('updateUserPassword', [UserController::class, 'updateUserPassword']);
+Route::patch('updateUserProfileInfos', [UserController::class, 'updateUserProfileInfos']);
+
 
 //Messages
 Route::post('/messages/send', [MessageController::class, 'sendTextMessage']);
