@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
@@ -79,34 +80,46 @@ class UserController extends Controller
     
    // Connexion
    public function login(Request $request)
-   {
-       $validator = Validator::make($request->all(), [
-           'email' => 'required|email',
-           'password' => 'required|string|min:3',
-       ]);
+    {
+        // Valider les entrées (email et mot de passe)
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+            'password' => 'required|string|min:3',
+        ]);
 
-       if ($validator->fails()) {
-           return response()->json([
-               'status_code' => 422,
-               'message' => 'Validation Failed',
-               'errors' => $validator->errors(),
-           ], 422);
-       }
+        if ($validator->fails()) {
+            return response()->json([
+                'status_code' => 422,
+                'message' => 'Validation Failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+    
+        // Récupérer les credentials
+        $credentials = $request->only('email', 'password');
+    
+        // Tentative de connexion avec JWTAuth
+        if (!$token = JWTAuth::attempt($credentials)) {
+            return response()->json([
+                'status_code' => 401,
+                'message' => 'Unauthorized',
+                'error' => 'Email ou mot de passe incorrect',
+            ], 401);
+        }
+        dd($token);
+        // Récupérer l'utilisateur connecté
+        $user = auth()->user();
+    
+        return response()->json([
+            'status_code' => 200,
+            'message' => 'Connexion réussie',
+            'data' => [
+                'user' => $user,
+                'token' => $token,
+            ],
+        ], 200);
+    }
 
-       if (!Auth::attempt(['email' => $request->email, 'password' => $request->password])) {
-           return response()->json(['error' => 'Email ou mot de passe incorrect'], 401);
-       }
-
-       $user = Auth::user();
-       $token = $user->createToken('API Token')->plainTextToken;
-
-       return response()->json([
-           'status_code' => 200,
-           'message' => 'Connexion réussie',
-           'token' => $token,
-           'user' => $user,
-       ], 200);
-   }
 
    // Déconnexion
    public function logout(Request $request)
