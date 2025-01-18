@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\DiscussionController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -25,3 +26,21 @@ Route::post('/messages/report/{message}', [MessageController::class, 'reportMess
 Route::post('/messages/send-file', [MessageController::class, 'sendFileMessage']);
 Route::get('/messages/search', [MessageController::class, 'searchMessages']);
 Route::post('/messages/transfer/{message}', [MessageController::class, 'transferMessage']);
+
+//Discussions
+Route::post('/discussions/create', [DiscussionController::class, 'createGroupDiscussion']);
+Route::patch('/discussions/{discussion}', [DiscussionController::class, 'updateDiscussion']);
+Route::delete('/discussions/{discussion}', [DiscussionController::class, 'deleteDiscussion']);
+Route::post('/discussions/add-member/{discussion}', [DiscussionController::class, 'addMember']);
+Route::post('/discussions/remove-member/{discussion}', [DiscussionController::class, 'removeMember']);
+Route::post('/discussions/archive/{discussion}', [DiscussionController::class, 'archiveDiscussion']);
+Route::get('/discussions/export/{discussion}', [DiscussionController::class, 'exportDiscussionToPdf']);
+Route::patch('/discussions/assign-admin/{discussion}', [DiscussionController::class, 'assignAdmin']);
+Route::patch('/discussions/archive/{discussion}', [DiscussionController::class, 'archiveDiscussion']);
+Route::get('/discussions/unarchived', [DiscussionController::class, 'listUnarchivedDiscussions']);
+Route::get('/discussions/archived', [DiscussionController::class, 'listArchivedDiscussions']);
+Route::patch('/discussions/mute/{discussion}', [DiscussionController::class, 'muteDiscussion']);
+
+
+
+

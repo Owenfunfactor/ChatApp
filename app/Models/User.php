@@ -4,11 +4,11 @@ namespace App\Models;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use MongoDB\Laravel\Eloquent\Model;
 use Tymon\JWTAuth\Contracts\JWTSubject;
 use Laravel\Sanctum\HasApiTokens;
-use MongoDB\Laravel\Eloquent\Model as Eloquent;  // Correctement importé
 
-class User extends Authenticatable implements JWTSubject
+class User extends Model implements JWTSubject
 {
     use HasApiTokens, Notifiable;
     /**
@@ -83,6 +83,11 @@ class User extends Authenticatable implements JWTSubject
     public function getAuthIdentifierName()
     {
         return '_id'; // MongoDB uses `_id` as the primary key.
+    }
+
+    public function messages()
+    {
+        return $this->hasMany(Message::class, 'discussionId', '_id');
     }
 
     

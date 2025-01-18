@@ -47,7 +47,7 @@ class MessageController extends Controller
                 ], 400);
             }
 
-            $userId = $request->senderId;
+            $userId = auth()->id();
             $discussion = Discussion::where('_id', $request->discussionId)->first();
             
             // Vérification des droits
@@ -116,7 +116,7 @@ class MessageController extends Controller
             
             // Création du message
             $message = new Message();
-            $message->senderId = $request->input('senderId');
+            $message->senderId = auth()->id();
             $message->discussionId = $request->input('discussionId');
             $message->text = $request->input('text');
             $message->messageId = $request->messageId ?? null;
@@ -173,14 +173,14 @@ class MessageController extends Controller
                 ], 404);
             }
 
-            if ($message->senderId !== $request->senderId) {
+            if ($message->senderId !== auth()->id()) {
                 return response()->json([
                     'status_code' => 403,
                     'message' => 'Vous n\'êtes pas autorisé à modifier ce message.',
                 ], 403);
             }
 
-            $userId = $request->senderId;
+            $userId = auth()->id();
             $discussion = Discussion::where('_id', $request->discussionId)->first();
             
             // Vérification des droits
@@ -266,6 +266,9 @@ class MessageController extends Controller
         }
     }
 
+    /**
+     * Envoyer un fichier
+     */
     public function sendFileMessage(Request $request)
     {
         try {
@@ -295,7 +298,7 @@ class MessageController extends Controller
                 ], 400);
             }
 
-            $userId = $request->senderId;
+            $userId = auth()->id();
             $discussion = Discussion::where('_id', $request->discussionId)->first();
                  
             // Vérification des droits
@@ -367,7 +370,7 @@ class MessageController extends Controller
 
             // Création du message
             $message = new Message();
-            $message->senderId = $request->input('senderId');
+            $message->senderId = auth()->id();
             $message->discussionId = $request->discussionId;
             $message->file = [
                 'path' => $path,
@@ -399,6 +402,9 @@ class MessageController extends Controller
     }
 
 
+    /**
+     * Rechercher des messages
+     */
     public function searchMessages(Request $request)
     {
         try {
@@ -421,7 +427,7 @@ class MessageController extends Controller
                 ], 400);
             }
 
-            $userId = $request->senderId;
+            $userId = auth()->id();
             $discussion = Discussion::where('_id', $request->discussionId)->first();
 
             // Vérification des droits
@@ -463,6 +469,9 @@ class MessageController extends Controller
         }
     }
 
+    /**
+     * Transférer un message
+     */
     public function transferMessage(Request $request, Message $message)
     {
         try {
@@ -489,7 +498,7 @@ class MessageController extends Controller
                 ], 404);
             }
 
-            $userId = $request->senderId;
+            $userId = auth()->id();
             $discussion = Discussion::where('_id', $request->discussionId)->first();
 
             // Vérification des droits
@@ -560,7 +569,7 @@ class MessageController extends Controller
                 ], 404);
             }
 
-            if ($message->senderId !== $request->senderId) {
+            if ($message->senderId !== auth()->id()) {
                 return response()->json([
                     'status_code' => 403,
                     'message' => 'Vous n\'êtes pas autorisé à supprimer ce message.',
@@ -606,7 +615,7 @@ class MessageController extends Controller
                 ], 404);
             }
 
-            $userId = $request->senderId;
+            $userId = auth()->id();
 
             $signaler = in_array($userId, $message->signalers);        
 

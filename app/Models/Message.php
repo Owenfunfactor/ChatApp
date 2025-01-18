@@ -18,4 +18,9 @@ class Message extends Model
         'createdAt' => 'datetime',
         'updatedAt' => 'datetime',
     ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'senderId', '_id');
+    }
 }
