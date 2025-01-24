@@ -8,7 +8,7 @@ use MongoDB\Laravel\Eloquent\Model;
 use Tymon\JWTAuth\Contracts\JWTSubject;
 use Laravel\Sanctum\HasApiTokens;
 
-class User extends Model implements JWTSubject
+class User extends Authenticatable implements JWTSubject
 {
     use HasApiTokens, Notifiable;
     /**

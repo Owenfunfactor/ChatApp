@@ -64,9 +64,9 @@ return [
     */
 
     'providers' => [
-        'users' => [
-            'driver' => 'eloquent',
-            'model' => env('AUTH_MODEL', App\Models\User::class),
+            'users' => [
+            'driver' => 'eloquent', // Assurez-vous d'utiliser le bon driver
+            'model' => App\Models\User::class,
         ],
 
         // 'users' => [

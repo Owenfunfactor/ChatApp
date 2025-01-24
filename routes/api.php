@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\DiscussionController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Http\Request;
@@ -40,6 +41,30 @@ Route::patch('/discussions/archive/{discussion}', [DiscussionController::class, 
 Route::get('/discussions/unarchived', [DiscussionController::class, 'listUnarchivedDiscussions']);
 Route::get('/discussions/archived', [DiscussionController::class, 'listArchivedDiscussions']);
 Route::patch('/discussions/mute/{discussion}', [DiscussionController::class, 'muteDiscussion']);
+
+//Contacts. Fait
+Route::get('/contact/search', [ContactController::class, 'searchContacts']);
+
+// Envoyer une demande de contact. Fait
+Route::post('/contact/send-request', [ContactController::class, 'sendContactRequest']);
+
+// Accepter une demande de contact. Fait
+Route::patch('/contact/accept/{contact}', [ContactController::class, 'acceptContactRequest']);
+
+// Refuser une demande de contact. Fait
+Route::delete('/contact/reject/{contact}', [ContactController::class, 'rejectContactRequest']);
+
+// Liste des demandes de contact reçues
+Route::get('/contact/requests', [ContactController::class, 'listReceivedRequests']);
+
+// Bloquer un contact. Fait
+Route::patch('/contact/block/{contact}', [ContactController::class, 'blockContact']);
+
+// Liste des contacts établis
+Route::get('/contact/established', [ContactController::class, 'listEstablishedContacts']);
+
+// Supprimer un contact. Fait 
+Route::delete('/contact/delete/{contact}', [ContactController::class, 'deleteContact']);
 
 
 

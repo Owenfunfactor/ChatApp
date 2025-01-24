@@ -81,45 +81,36 @@ class UserController extends Controller
    // Connexion
    public function login(Request $request)
     {
-        // Valider les entrées (email et mot de passe)
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
-            'password' => 'required|string|min:3',
-        ]);
+        try {
+            $credentials = $request->only('email', 'password');
+            
+            // Utilisez attempt() sans préciser le guard
+            if (!$token = auth()->attempt($credentials)) {
+                return response()->json([
+                    'status_code' => 401,
+                    'message' => 'Unauthorized',
+                    'error' => 'Email ou mot de passe incorrect',
+                ], 401);
+            }
 
-        if ($validator->fails()) {
+            $user = auth()->user();
+
             return response()->json([
-                'status_code' => 422,
-                'message' => 'Validation Failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-    
-        // Récupérer les credentials
-        $credentials = $request->only('email', 'password');
-    
-        // Tentative de connexion avec JWTAuth
-        if (!$token = JWTAuth::attempt($credentials)) {
+                'status_code' => 200,
+                'message' => 'Connexion réussie',
+                'data' => [
+                    'user' => $user,
+                    'token' => $token,
+                ],
+            ], 200);
+        } catch (Exception $e) {
             return response()->json([
-                'status_code' => 401,
-                'message' => 'Unauthorized',
-                'error' => 'Email ou mot de passe incorrect',
-            ], 401);
+                'status_code' => 500,
+                'message' => 'Erreur d\'authentification',
+                'error' => $e->getMessage(),
+            ], 500);
         }
-        dd($token);
-        // Récupérer l'utilisateur connecté
-        $user = auth()->user();
-    
-        return response()->json([
-            'status_code' => 200,
-            'message' => 'Connexion réussie',
-            'data' => [
-                'user' => $user,
-                'token' => $token,
-            ],
-        ], 200);
     }
-
 
    // Déconnexion
    public function logout(Request $request)
