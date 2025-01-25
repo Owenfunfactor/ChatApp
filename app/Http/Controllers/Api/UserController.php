@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+
 use Exception;
 
 class UserController extends Controller
@@ -39,7 +40,7 @@ class UserController extends Controller
             if ($validator->fails()) {
                 return response()->json([
                     'status_code' => 400,
-                    'message' => 'Bad Request',
+                    'message' => 'Bad Request, Veuillez bien remplir le formulaire svp.',
                     'errors' => $validator->errors(),
                 ], 400);
             }
@@ -53,10 +54,10 @@ class UserController extends Controller
             ];
             $user->email = $request->input('email');
             $user->username = $request->input('username');
-            $user->isOnLine = false; // Par défaut, l'utilisateur n'est pas en ligne
-            $user->isActivated = true; // Par défaut, l'utilisateur est activé
-            $user->password = Hash::make($request->input('password'), [
-                'rounds' => 12,
+            $user->isOnLine = false; // Par défaut, l'utilisateur n'est pas en ligne   
+            $user->isActivated = true; // Par défaut, l'utilisateur est activé 
+            $user->password = Hash::make($request->input('password'), [  
+                'rounds' => 12, 
             ]);
             $user->verifyAd = null;
             $user->verifyToken = null;
@@ -78,54 +79,51 @@ class UserController extends Controller
         }
     }
     
-   // Connexion
-   public function login(Request $request)
-    {
-        try {
-            $credentials = $request->only('email', 'password');
-            
-            // Utilisez attempt() sans préciser le guard
-            if (!$token = auth()->attempt($credentials)) {
-                return response()->json([
-                    'status_code' => 401,
-                    'message' => 'Unauthorized',
-                    'error' => 'Email ou mot de passe incorrect',
-                ], 401);
-            }
+// Connexion
+public function login(Request $request)
+{
+    // Validation des entrées
+    $request->validate([
+        'email' => 'required|email',
+        'password' => 'required|string|min:6',
+    ]);
 
-            $user = auth()->user();
+    // Préparer les identifiants pour l'authentification
+    $credentials = $request->only('email', 'password');
 
-            return response()->json([
-                'status_code' => 200,
-                'message' => 'Connexion réussie',
-                'data' => [
-                    'user' => $user,
-                    'token' => $token,
-                ],
-            ], 200);
-        } catch (Exception $e) {
-            return response()->json([
-                'status_code' => 500,
-                'message' => 'Erreur d\'authentification',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
+    // Essayer de générer un token
+    if (!$token = Auth::attempt($credentials)) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Email ou mot de passe incorrect.',
+        ], 401);
     }
 
+    // Si tout est bon, retourner le token
+    return response()->json([
+        'status' => 'success',
+        'message' => 'Connexion réussie.',
+        'token' => $token,
+        'user' => Auth::user(),
+    ], 200);
+}
+
    // Déconnexion
-   public function logout(Request $request)
-   {
-       try {
-           $user = $request->user();
-           if ($user) {
-               $user->tokens()->delete();
-               return response()->json(['message' => 'Déconnexion réussie']);
-           }
-           return response()->json(['message' => 'Aucun utilisateur authentifié'], 401);
-       } catch (Exception $e) {
-           return response()->json(['message' => $e->getMessage()], 500);
-       }
-   }
+   public function logout()
+    {
+        try {
+            Auth::logout(); // Invalide le token
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Déconnexion réussie.',
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Erreur lors de la déconnexion.',
+            ], 500);
+        }   
+    }
 
    // Mise à jour des informations de profil
    public function updateUserProfileInfos(Request $request)
@@ -264,7 +262,7 @@ public function resetPassword(Request $request)
 
     return response()->json(['error' => 'Le token est invalide ou expiré.'], 400);
 }
-
+// Uploa une photo de profil 
 public function updateProfilePicture(Request $request)
 {
     // Validation de l'image
@@ -288,24 +286,19 @@ public function updateProfilePicture(Request $request)
     // Définir le chemin de stockage (ex : storage/app/public/profile_pictures)
     $path = $image->storeAs('public/profile_pictures', $imageName);
 
-    // Si l'utilisateur a déjà une photo de profil, la supprimer pour éviter l'encombrement
-    if (!empty($user->profile_picture)) {
-        $oldImagePath = str_replace('storage', 'public', $user->profile_picture); // Convertir le chemin pour l'utiliser avec Storage
-        if (\Storage::exists($oldImagePath)) {
-            \Storage::delete($oldImagePath);
-        }
-    }
-
-    // Mettre à jour le chemin de la photo dans la base de données
-    $user->profile_picture = str_replace('public', 'storage', $path); // Stockage public pour l'accès via HTTP
+    // Mise à jour de l'utilisateur avec le chemin de l'image
+    $user->identity['picture'] = $path;
     $user->save();
 
-    // Réponse
-    return response()->json(['message' => 'Photo de profil mise à jour avec succès.', 'profile_picture_url' => asset($user->profile_picture)], 200);
+    return response()->json([
+        'status' => 'success',
+        'message' => 'Photo de profil mise à jour avec succès.',
+        'data' => $user,
+    ], 200);
 }
 
 
-public function deactivateAccount(Request $request)
+public function desactivateAccount(Request $request)
 {
     // Validation des données entrées par l'utilisateur
     $validator = Validator::make($request->all(), [

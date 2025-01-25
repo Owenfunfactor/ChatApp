@@ -7,65 +7,63 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\MessageController;
 
-
+// Route pour obtenir les informations de l'utilisateur connecté (protégé par Sanctum)
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
-//User
+// Routes publiques (pas besoin de token)
 Route::post('register', [UserController::class, 'register']);
 Route::post('login', [UserController::class, 'login']);
 Route::patch('updateUserPassword', [UserController::class, 'updateUserPassword']);
 Route::patch('updateUserProfileInfos', [UserController::class, 'updateUserProfileInfos']);
 
+// Routes protégées par le middleware d'authentification
+Route::middleware('auth:sanctum')->group(function () {
 
-//Messages
-Route::post('/messages/send', [MessageController::class, 'sendTextMessage']);
-Route::patch('/messages/{message}', [MessageController::class, 'editMessage']);
-Route::delete('/messages/{message}', [MessageController::class, 'deleteMessage']);
-Route::post('/messages/report/{message}', [MessageController::class, 'reportMessage']);
-Route::post('/messages/send-file', [MessageController::class, 'sendFileMessage']);
-Route::get('/messages/search', [MessageController::class, 'searchMessages']);
-Route::post('/messages/transfer/{message}', [MessageController::class, 'transferMessage']);
+    // Récupérer les informations de l'utilisateur connecté
+    Route::get('/user', [UserController::class, 'me']);
+    
+    // Mise à jour du profil de l'utilisateur
+    Route::patch('/user/update-profile', [UserController::class, 'updateUserProfileInfos']);
+    Route::patch('/user/update-password', [UserController::class, 'updateUserPassword']);
+    Route::patch('/user/update-profile-picture', [UserController::class, 'updateProfilePicture']);
+    
+    // Désactivation du compte utilisateur
+    Route::delete('/user/desactivate', [UserController::class, 'desactivateAccount']);
+    
+    // Déconnexion de l'utilisateur
+    Route::post('/user/logout', [UserController::class, 'logout']);
 
-//Discussions
-Route::post('/discussions/create', [DiscussionController::class, 'createGroupDiscussion']);
-Route::patch('/discussions/{discussion}', [DiscussionController::class, 'updateDiscussion']);
-Route::delete('/discussions/{discussion}', [DiscussionController::class, 'deleteDiscussion']);
-Route::post('/discussions/add-member/{discussion}', [DiscussionController::class, 'addMember']);
-Route::post('/discussions/remove-member/{discussion}', [DiscussionController::class, 'removeMember']);
-Route::post('/discussions/archive/{discussion}', [DiscussionController::class, 'archiveDiscussion']);
-Route::get('/discussions/export/{discussion}', [DiscussionController::class, 'exportDiscussionToPdf']);
-Route::patch('/discussions/assign-admin/{discussion}', [DiscussionController::class, 'assignAdmin']);
-Route::patch('/discussions/archive/{discussion}', [DiscussionController::class, 'archiveDiscussion']);
-Route::get('/discussions/unarchived', [DiscussionController::class, 'listUnarchivedDiscussions']);
-Route::get('/discussions/archived', [DiscussionController::class, 'listArchivedDiscussions']);
-Route::patch('/discussions/mute/{discussion}', [DiscussionController::class, 'muteDiscussion']);
+    // Messages
+    Route::post('/messages/send', [MessageController::class, 'sendTextMessage']);
+    Route::patch('/messages/{message}', [MessageController::class, 'editMessage']);
+    Route::delete('/messages/{message}', [MessageController::class, 'deleteMessage']);
+    Route::post('/messages/report/{message}', [MessageController::class, 'reportMessage']);
+    Route::post('/messages/send-file', [MessageController::class, 'sendFileMessage']);
+    Route::get('/messages/search', [MessageController::class, 'searchMessages']);
+    Route::post('/messages/transfer/{message}', [MessageController::class, 'transferMessage']);
 
-//Contacts. Fait
-Route::get('/contact/search', [ContactController::class, 'searchContacts']);
+    // Discussions
+    Route::post('/discussions/create', [DiscussionController::class, 'createGroupDiscussion']);
+    Route::patch('/discussions/{discussion}', [DiscussionController::class, 'updateDiscussion']);
+    Route::delete('/discussions/{discussion}', [DiscussionController::class, 'deleteDiscussion']);
+    Route::post('/discussions/add-member/{discussion}', [DiscussionController::class, 'addMember']);
+    Route::post('/discussions/remove-member/{discussion}', [DiscussionController::class, 'removeMember']);
+    Route::patch('/discussions/mute/{discussion}', [DiscussionController::class, 'muteDiscussion']);
+    Route::get('/discussions/unarchived', [DiscussionController::class, 'listUnarchivedDiscussions']);
+    Route::get('/discussions/archived', [DiscussionController::class, 'listArchivedDiscussions']);
+    Route::patch('/discussions/assign-admin/{discussion}', [DiscussionController::class, 'assignAdmin']);
+    Route::get('/discussions/export/{discussion}', [DiscussionController::class, 'exportDiscussionToPdf']);
 
-// Envoyer une demande de contact. Fait
-Route::post('/contact/send-request', [ContactController::class, 'sendContactRequest']);
-
-// Accepter une demande de contact. Fait
-Route::patch('/contact/accept/{contact}', [ContactController::class, 'acceptContactRequest']);
-
-// Refuser une demande de contact. Fait
-Route::delete('/contact/reject/{contact}', [ContactController::class, 'rejectContactRequest']);
-
-// Liste des demandes de contact reçues
-Route::get('/contact/requests', [ContactController::class, 'listReceivedRequests']);
-
-// Bloquer un contact. Fait
-Route::patch('/contact/block/{contact}', [ContactController::class, 'blockContact']);
-
-// Liste des contacts établis
-Route::get('/contact/established', [ContactController::class, 'listEstablishedContacts']);
-
-// Supprimer un contact. Fait 
-Route::delete('/contact/delete/{contact}', [ContactController::class, 'deleteContact']);
-
-
-
+    // Contacts
+    Route::get('/contact/search', [ContactController::class, 'searchContacts']);
+    Route::post('/contact/send-request', [ContactController::class, 'sendContactRequest']);
+    Route::patch('/contact/accept/{contact}', [ContactController::class, 'acceptContactRequest']);
+    Route::delete('/contact/reject/{contact}', [ContactController::class, 'rejectContactRequest']);
+    Route::get('/contact/requests', [ContactController::class, 'listReceivedRequests']);
+    Route::patch('/contact/block/{contact}', [ContactController::class, 'blockContact']);
+    Route::get('/contact/established', [ContactController::class, 'listEstablishedContacts']);
+    Route::delete('/contact/delete/{contact}', [ContactController::class, 'deleteContact']);
+});
 
