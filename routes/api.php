@@ -7,6 +7,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\MessageController;
 
+Route::get('/test', function () {
+    return response()->json(['message' => 'Test API Groupe 4']);
+});
+
 // Route pour obtenir les informations de l'utilisateur connecté (protégé par Sanctum)
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -15,8 +19,9 @@ Route::get('/user', function (Request $request) {
 // Routes publiques (pas besoin de token)
 Route::post('register', [UserController::class, 'register']);
 Route::post('login', [UserController::class, 'login']);
-Route::patch('updateUserPassword', [UserController::class, 'updateUserPassword']);
-Route::patch('updateUserProfileInfos', [UserController::class, 'updateUserProfileInfos']);
+
+//Route::patch('updateUserPassword', [UserController::class, 'updateUserPassword']);
+//Route::patch('updateUserProfileInfos', [UserController::class, 'updateUserProfileInfos']);
 
 // Routes protégées par le middleware d'authentification
 Route::middleware('auth:sanctum')->group(function () {
@@ -34,7 +39,7 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Déconnexion de l'utilisateur
     Route::post('/user/logout', [UserController::class, 'logout']);
-
+    
     // Messages
     Route::post('/messages/send', [MessageController::class, 'sendTextMessage']);
     Route::patch('/messages/{message}', [MessageController::class, 'editMessage']);
