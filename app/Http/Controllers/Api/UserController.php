@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 use Exception;
 
@@ -62,6 +63,8 @@ class UserController extends Controller
             $user->verifyAd = null;
             $user->verifyToken = null;
             $user->tokenExpiredAt = null;
+            $user->tokenExpiredAt = null;
+            $token = Str::random(60);
             $user->save();
 
             return response()->json([
@@ -69,6 +72,7 @@ class UserController extends Controller
                 'error' => false,
                 'message' => 'Utilisateur créé avec succès',
                 'data' => $user,
+                "token" => $token
             ], 200);
         } catch (Exception $e) {
             return response()->json([
