@@ -80,10 +80,12 @@ class UserController extends Controller
             $user->save();
 
             // Envoie de mail
-            Mail::to($user->email)->send(new WelcomeUser(
-                $user->email, 
-                $request->input('identity.fullName'), 
-                $user->token)
+            Mail::to($user->email)->send(
+                new WelcomeUser(
+                    $user->email,
+                    $request->input('identity.fullName'),
+                    $user->token
+                )
             );
 
             return response()->json([
@@ -102,7 +104,52 @@ class UserController extends Controller
         }
     }
 
-    // Connexion
+    /**
+     * Vérifie l'email d'un utilisateur en utilisant un jeton (token).
+     *
+     * @param Request $request L'objet de requête contenant le jeton pour la vérification de l'email.
+     *
+     * @return JsonResponse Une réponse JSON indiquant le statut de l'opération.
+     *
+     * @throws \Exception Si une erreur survient lors du traitement.
+     */
+    public function verifyEmail(Request $request)
+    {
+        try {
+            $user = User::where('token', $request->token)->first();
+            if (!$user) {
+                return response()->json([
+                    'message' => 'Pas d\'acces',
+                ]);
+            }
+
+            $user->token = Str::random(60);
+            $user->verifyAd = now();
+            $user->save();
+
+            return response()->json([
+                'status_code' => 200,
+                'error' => false,
+                'message' => 'Email verifier avec succès',
+                "token" => $user->token
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status_code' => 400,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
+     * Authentifie un utilisateur et retourne un jeton d'accès en cas de succès.
+     *
+     * @param Request $request L'objet de requête contenant les informations d'authentification de l'utilisateur.
+     *
+     * @return JsonResponse Une réponse JSON contenant le statut, un message, et le jeton d'accès en cas de succès.
+     *
+     * @throws ValidationException Si les données de validation ne respectent pas les contraintes définies.
+     */
     public function login(Request $request)
     {
         // Validation des entrées
@@ -126,7 +173,7 @@ class UserController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Connexion réussie.',
-            'token' => $token,
+            'token' => Auth::user()->token,
             'user' => Auth::user(),
         ], 200);
     }
@@ -149,10 +196,20 @@ class UserController extends Controller
     }
 
     // Mise à jour des informations de profil
-    public function updateUserProfileInfos(Request $request)
+    public function updateUserProfileInfos(Request $request, $id)
     {
         try {
-            $user = $request->user();
+
+            $token = $request->header('Authorization');
+            if ($token && str_starts_with($token, 'Bearer ')) { $token = substr($token, 7); }
+
+            $user = User::find($id);
+            if (!$user) {return response()->json(['message' => 'Utilisateur non trouvé'], 404);}
+            if (!$user->token === $token) {
+                return response()->json([
+                    'message' => 'Token invalide.',
+                ], 403);
+            }
 
             $validator = Validator::make($request->all(), [
                 'identity.fullName' => 'required|string|max:255',
