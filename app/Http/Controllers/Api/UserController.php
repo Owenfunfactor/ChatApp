@@ -65,6 +65,7 @@ class UserController extends Controller
             $user->tokenExpiredAt = null;
             $user->tokenExpiredAt = null;
             $token = Str::random(60);
+            $user->token = $token;
             $user->save();
 
             return response()->json([
