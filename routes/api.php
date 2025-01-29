@@ -40,7 +40,7 @@ Route::post('/user/update-profile-picture/{user}', [UserController::class, 'upda
 Route::delete('/user/desactivate/{user}', [UserController::class, 'desactivateAccount']);
 
 // Déconnexion de l'utilisateur
-Route::post('/user/logout', [UserController::class, 'logout']);
+Route::post('/user/logout/{user}', [UserController::class, 'logout']);
 
 // Messages
 Route::post('/messages/send', [MessageController::class, 'sendTextMessage']);

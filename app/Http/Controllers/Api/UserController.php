@@ -206,19 +206,29 @@ class UserController extends Controller
     }
 
     // Déconnexion
-    public function logout()
+    public function logout(Request $request, string $id)
     {
-        try {
-            Auth::logout(); // Invalide le token
+        $user = $this->verifyUser($request, $id);
+        if ($user === null) {
             return response()->json([
-                'status' => 'success',
-                'message' => 'Déconnexion réussie.',
-            ], 200);
+                'statut_code' => 500,
+                'message' => "Impossible d'effectuer cette action"
+            ]);
+        }
+
+        try {
+            $user->isOnLine = false;
+            $user->token = null;
+            $user->save();
+            return response()->json([
+                'statut_code' => 200,
+                'message' => "Utilisateur deconnecter avec succes"
+            ]);
         } catch (\Exception $e) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'Erreur lors de la déconnexion.',
-            ], 500);
+                'statut_code' => 500,
+                'message' => $e->getMessage()
+            ]);
         }
     }
 
