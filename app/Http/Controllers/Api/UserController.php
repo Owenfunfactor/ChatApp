@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Mail\RestPassword;
 use App\Mail\WelcomeUser;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Models\User;
@@ -17,6 +18,32 @@ use Illuminate\Support\Facades\Mail;
 
 class UserController extends Controller
 {
+
+    private function verifyUser(Request $request, string $id)
+    {
+        try {
+
+            $user = User::find($id);
+            //dd($user);
+            if (!$user) {
+                return response()->json(['message' => 'Utilisateur non trouvé'], 404);
+            }
+
+            $token = $request->header('Authorization');
+            if ($token != null && str_starts_with($token, 'Bearer')) {
+                $token = substr($token, 7);
+            }
+
+            if ($user->token != $token) {
+                return null;
+            }
+
+            return $user;
+        } catch (\Exception $e) {
+            echo 'fail';
+        }
+    }
+
     /**
      * Enregistre un nouvel utilisateur dans la base de données.
      *
@@ -195,16 +222,28 @@ class UserController extends Controller
         }
     }
 
-    // Mise à jour des informations de profil
+    /**
+     * Met à jour les informations du profil d'un utilisateur.
+     *
+     * @param Request $request La requête contenant les nouvelles informations du profil.
+     * @param int $id L'identifiant de l'utilisateur à mettre à jour.
+     * @return JsonResponse La réponse JSON contenant le statut de l'opération.
+     *
+     * @throws \Exception En cas d'erreur serveur.
+     */
     public function updateUserProfileInfos(Request $request, $id)
     {
         try {
 
             $token = $request->header('Authorization');
-            if ($token && str_starts_with($token, 'Bearer ')) { $token = substr($token, 7); }
+            if ($token && str_starts_with($token, 'Bearer ')) {
+                $token = substr($token, 7);
+            }
 
             $user = User::find($id);
-            if (!$user) {return response()->json(['message' => 'Utilisateur non trouvé'], 404);}
+            if (!$user) {
+                return response()->json(['message' => 'Utilisateur non trouvé'], 404);
+            }
             if (!$user->token === $token) {
                 return response()->json([
                     'message' => 'Token invalide.',
@@ -244,12 +283,28 @@ class UserController extends Controller
         }
     }
 
-    // Mise à jour du mot de passe
-    public function updateUserPassword(Request $request)
+    /**
+     * Met à jour le mot de passe d'un utilisateur après vérification de l'ancien mot de passe.
+     *
+     * @param Request $request La requête contenant le mot de passe actuel et le nouveau mot de passe.
+     * @param string $id L'identifiant de l'utilisateur.
+     * @return JsonResponse La réponse JSON contenant le statut de l'opération.
+     *
+     * @throws \Exception En cas d'erreur serveur.
+     */
+    public function updateUserPassword(Request $request, string $id)
     {
+        /* IDENTIFICATION DE L'UTILISATEUR */
+        $user = $this->verifyUser($request, $id);
+        if ($user === null) {
+            return response()->json([
+                'statut_code' => 500,
+                'message' => 'Utilisateur invalid'
+            ], 500);
+        }
         $validator = Validator::make($request->all(), [
             'current_password' => 'required|string',
-            'new_password' => 'required|string|min:8|confirmed',
+            'new_password' => 'required|string|min:8',
         ]);
 
         if ($validator->fails()) {
@@ -259,92 +314,108 @@ class UserController extends Controller
             ], 422);
         }
 
-        $user = $request->user();
+
         if (Hash::check($request->input('current_password'), $user->password)) {
             $user->password = Hash::make($request->input('new_password'));
+            $user->token = $token = Str::random(60);
             $user->save();
 
-            return response()->json(['message' => 'Mot de passe mis à jour avec succès'], 200);
+            return response()->json(['message' => 'Mot de passe mis à jour avec succès', 'token' => $user->token], 200);
         }
 
         return response()->json(['message' => 'Le mot de passe actuel est incorrect'], 400);
     }
 
-    public function sendResetLink(Request $request)
+    /**
+     * Envoie un lien de réinitialisation du mot de passe à l'utilisateur.
+     *
+     * @param Request $request La requête contenant les données nécessaires.
+     * @param string $id L'identifiant de l'utilisateur.
+     * @return JsonResponse La réponse JSON indiquant le statut de l'opération.
+     *
+     * @throws \Exception En cas d'erreur lors de l'envoi de l'email.
+     */
+    public function sendResetLink(Request $request, string $id)
     {
-        // Validation de l'e-mail
-        $validator = Validator::make($request->all(), [
-            'email' => ['required', 'email', 'exists:users,email'],
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['error' => $validator->errors()], 422);
-        }
-
-        // Trouver l'utilisateur
-        $user = \App\Models\User::where('email', $request->email)->first();
-
-        if ($user) {
-            // Générer un token de réinitialisation (UUID)
-            $token = \Str::uuid()->toString();
-
-            // Enregistrer le token dans l'utilisateur
-            $user->resetToken = $token;
-            $user->tokenExpiredAt = now()->addMinutes(60); // Définir une expiration de 60 minutes
+        try {
+            $user = $this->verifyUser($request, $id);
+            if ($user === null) {
+                return response()->json([
+                    'statut_code' => 500,
+                    'message' => 'Utilisateur invalid'
+                ], 500);
+            }
+            $user->token = Str::random(60);
             $user->save();
+            Mail::to($user->email)->send(
+                new WelcomeUser(
+                    $user->email,
+                    $request->input('identity.fullName'),
+                    $user->token
+                )
+            );
 
-            // Envoyer la notification avec le token
-            $user->notify(new CustomResetPassword($user->email, $token));
-
-            // Journalisation pour audit
-            \Log::info("Lien de réinitialisation envoyé à : " . $request->email);
-
-            return response()->json(['message' => 'Lien de réinitialisation envoyé avec succès.'], 200);
+            return response()->json([
+                'statut_code' => 200,
+                'token' => $user->token,
+                'message' => 'Email de verification renvoyer avec succes'
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut_code' => 500,
+                'message' => $e->getMessage()
+            ], 500);
         }
-
-        return response()->json(['error' => 'Une erreur est survenue.'], 500);
     }
 
+
+    /**
+     * Génère un token de réinitialisation et envoie un email à l'utilisateur pour réinitialiser son mot de passe.
+     *
+     * @param Request $request La requête contenant l'email de l'utilisateur.
+     * @return JsonResponse La réponse JSON indiquant le statut de l'opération.
+     *
+     * @throws \Exception En cas d'erreur lors du traitement.
+     */
     public function resetPassword(Request $request)
     {
         // Validation des données
         $validator = Validator::make($request->all(), [
-            'email' => ['required', 'email', 'exists:users,email'],
-            'token' => ['required'],
-            'password' => ['required', 'confirmed', \Illuminate\Validation\Rules\Password::defaults()],
+            'email' => ['required', 'email'],
         ]);
 
         if ($validator->fails()) {
             return response()->json(['error' => $validator->errors()], 422);
         }
 
-        // Vérification du token et de l'utilisateur
-        $user = \App\Models\User::where('email', $request->email)
-            ->where('resetToken', $request->token)
-            ->where('tokenExpiredAt', '>', now())
-            ->first();
-
-        if ($user) {
-            // Réinitialiser le mot de passe
-            $user->password = \Hash::make($request->password);
-            $user->resetToken = null; // Invalider le token
-            $user->tokenExpiredAt = null;
+        try {
+            $user = User::where('email', $request->email)->first();
+            $user->token = Str::random(60);
             $user->save();
+            Mail::to($user->email)->send(new RestPassword(
+                $user->email,
+                $user->identity['fullName'],
+                $user->token
+            ));
 
-            // Invalider toutes les sessions actives
-            $user->tokens()->delete();
-
-            // Envoyer une confirmation par e-mail
-            \Mail::to($user->email)->send(new PasswordResetMail($user));
-
-            return response()->json(['message' => 'Mot de passe réinitialisé avec succès.'], 200);
+            return response()->json([
+                'statut_code' => 200,
+                'user' => $user,
+                'token' => $user->token,
+                'message' => 'Email de verification renvoyer avec succes'
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut_code' => 500,
+                'message' => $e->getMessage()
+            ], 500);
         }
-
-        return response()->json(['error' => 'Le token est invalide ou expiré.'], 400);
     }
-    // Uploa une photo de profil 
-    public function updateProfilePicture(Request $request)
+
+    // TODO : Fix this fonctionnality 
+    public function updateProfilePicture(Request $request, string $id)
     {
+        dd($id, $request->all());
         // Validation de l'image
         $validator = Validator::make($request->all(), [
             'profile_picture' => ['required', 'image', 'mimes:jpg,png', 'max:5120'], // 5 Mo = 5120 Ko
@@ -354,31 +425,17 @@ class UserController extends Controller
             return response()->json(['error' => $validator->errors()], 422);
         }
 
-        // Récupérer l'utilisateur connecté
-        $user = auth()->user();
-
-        // Récupération de l'image
-        $image = $request->file('profile_picture');
-
-        // Générer un nom unique pour le fichier
-        $imageName = uniqid() . '_' . time() . '.' . $image->getClientOriginalExtension();
-
-        // Définir le chemin de stockage (ex : storage/app/public/profile_pictures)
-        $path = $image->storeAs('public/profile_pictures', $imageName);
-
-        // Mise à jour de l'utilisateur avec le chemin de l'image
-        $user->identity['picture'] = $path;
-        $user->save();
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Photo de profil mise à jour avec succès.',
-            'data' => $user,
-        ], 200);
+        $user = $this->verifyUser($request, $id);
     }
 
-
-    public function desactivateAccount(Request $request)
+    /**
+     * Désactive le compte d'un utilisateur après vérification du mot de passe.
+     *
+     * @param Request $request La requête HTTP contenant le mot de passe de l'utilisateur.
+     * @param string $id L'identifiant unique de l'utilisateur.
+     * @return JsonResponse Réponse JSON contenant le statut et un message.
+     */
+    public function desactivateAccount(Request $request, string $id)
     {
         // Validation des données entrées par l'utilisateur
         $validator = Validator::make($request->all(), [
@@ -389,32 +446,61 @@ class UserController extends Controller
             return response()->json(['error' => $validator->errors()], 422);
         }
 
-        // Récupérer l'utilisateur connecté
-        $user = auth()->user();
+        $user = $this->verifyUser($request, $id);
 
-        // Vérification du mot de passe fourni
-        if (!\Hash::check($request->password, $user->password)) {
-            return response()->json(['error' => 'Mot de passe incorrect.'], 403);
+        if (!$user) {
+            return response()->json(['message' => 'Aucun utilisateur trouver'], 500);
         }
 
-        // Désactivation du compte
-        $user->isActive = false;
-        $user->deactivatedAt = now(); // Optionnel : enregistrer la date de désactivation
-        $user->save();
+        if (!Hash::check($request->password, $user->password)) {
+            return response()->json(['message' => 'Impossible d\'effectuer cette action'], 500);
+        };
 
-        // Déconnexion des sessions actives
-        $user->tokens()->delete();
+        try {
+            $user->isActivated = false;
+            $user->token = null;
+            $user->save();
 
-        // Journalisation pour suivi
-        \Log::info("Compte désactivé pour l'utilisateur : " . $user->email);
-
-        // Réponse
-        return response()->json(['message' => 'Votre compte a été désactivé avec succès.'], 200);
+            return response()->json([
+                'statut_code' => 200,
+                'user' => $user,
+                'token' => $user->token,
+                'message' => 'Compte desactiver'
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut_code' => 500,
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
-    // Obtenir les informations de l'utilisateur connecté
-    public function me(Request $request)
+    /**
+     * Désactive le compte d'un utilisateur après vérification du mot de passe.
+     *
+     * @param Request $request La requête HTTP contenant le mot de passe de l'utilisateur.
+     * @param string $id L'identifiant unique de l'utilisateur.
+     * @return JsonResponse Réponse JSON contenant le statut et un message.
+     */
+    public function me(Request $request, string $id)
     {
-        return response()->json($request->user());
+        try {
+            $user = $this->verifyUser($request, $id);
+
+            if (!$user) {
+                return response()->json(['message' => 'Aucun utilisateur trouver'], 500);
+            }
+
+            return response()->json([
+                'statut_code' => 200,
+                'user' => $user,
+                'token' => $user->token,
+            ], 200);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'statut_code' => 500,
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 }
