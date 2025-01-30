@@ -12,11 +12,11 @@ return new class extends Migration
      */
     public function up()
     {
-        DB::connection('mongodb')->collection('discussions')->create();
+       
     }
 
     public function down()
     {
-        DB::connection('mongodb')->collection('discussions')->drop();
+        
     }
 };

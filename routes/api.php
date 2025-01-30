@@ -9,7 +9,7 @@ use App\Http\Controllers\Api\MessageController;
 
 Route::get('/test', function () {
     return response()->json(['message' => 'Test API Groupe 4']);
-});
+})->middleware('auth:sanctum');
 
 // Route pour obtenir les informations de l'utilisateur connecté (protégé par Sanctum)
 Route::get('/user', function (Request $request) {
@@ -21,26 +21,16 @@ Route::post('register', [UserController::class, 'register']);
 Route::get('verify-email', [UserController::class, 'verifyEmail']);
 Route::get('send-reset-link/{user}', [UserController::class, 'sendResetLink']);
 Route::post('reset-password/', [UserController::class, 'resetPassword']);
-Route::post('login', [UserController::class, 'login']);
+Route::post('login', [UserController::class, 'login'])->name('login');
 
-//Route::patch('updateUserPassword', [UserController::class, 'updateUserPassword']);
-//Route::patch('updateUserProfileInfos', [UserController::class, 'updateUserProfileInfos']);
 
-// TODO : Route a proteger
-
-// Récupérer les informations de l'utilisateur connecté
-Route::get('/user/{user}', [UserController::class, 'me']);
-
-// Mise à jour du profil de l'utilisateur
-Route::patch('/user/update-profile/{user}', [UserController::class, 'updateUserProfileInfos']);
-Route::patch('/user/update-password/{user}', [UserController::class, 'updateUserPassword']);
-Route::post('/user/update-profile-picture/{user}', [UserController::class, 'updateProfilePicture']);
-
-// Désactivation du compte utilisateur
-Route::delete('/user/desactivate/{user}', [UserController::class, 'desactivateAccount']);
-
-// Déconnexion de l'utilisateur
-Route::post('/user/logout', [UserController::class, 'logout']);
+// Users
+Route::get('/user', [UserController::class, 'me'])->middleware('auth')->middleware('auth');
+Route::patch('/user/update-profile', [UserController::class, 'updateUserProfileInfos'])->middleware('auth');
+Route::patch('/user/update-password', [UserController::class, 'updateUserPassword'])->middleware('auth');
+Route::post('/user/update-profile-picture/{user}', [UserController::class, 'updateProfilePicture'])->middleware('auth');
+Route::delete('/user/desactivate', [UserController::class, 'desactivateAccount'])->middleware('auth');
+Route::post('/user/logout', [UserController::class, 'logout'])->middleware('auth')->middleware("auth");
 
 // Messages
 Route::post('/messages/send', [MessageController::class, 'sendTextMessage']);
