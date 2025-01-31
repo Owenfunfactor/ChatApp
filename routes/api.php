@@ -42,7 +42,7 @@ Route::get('/messages/search', [MessageController::class, 'searchMessages']);
 Route::post('/messages/transfer/{message}', [MessageController::class, 'transferMessage']);
 
 // Discussions
-Route::post('/discussions/create', [DiscussionController::class, 'createGroupDiscussion']);
+Route::post('/discussions/create', [DiscussionController::class, 'createGroupDiscussion'])->middleware('auth:api');
 Route::patch('/discussions/{discussion}', [DiscussionController::class, 'updateDiscussion']);
 Route::delete('/discussions/{discussion}', [DiscussionController::class, 'deleteDiscussion']);
 Route::post('/discussions/add-member/{discussion}', [DiscussionController::class, 'addMember']);
