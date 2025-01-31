@@ -12,6 +12,27 @@ use Exception;
 
 class DiscussionController extends Controller
 {
+
+    /**
+     * Crée une discussion de groupe avec les participants spécifiés.
+     *
+     * Cette méthode permet à un utilisateur authentifié de créer une discussion de groupe
+     * avec un nom, une description optionnelle, une image et une liste de participants.
+     *
+     * @param \Illuminate\Http\Request $request Les données envoyées par le client, incluant :
+     *  - `name` (string, requis) : Le nom de la discussion.
+     *  - `description` (string, optionnel) : Une brève description de la discussion.
+     *  - `picture` (fichier image, optionnel) : Une image représentant la discussion (formats acceptés : jpeg, png, jpg, gif, max 5 Mo).
+     *  - `participants` (array, requis) : Liste des ID des utilisateurs invités à la discussion.
+     *  - `tags` (string, requis) : Type de la discussion (doit être "GROUPE").
+     *
+     * @return \Illuminate\Http\JsonResponse La réponse JSON contenant :
+     *  - `status_code` (int) : Le code de statut HTTP (201 en cas de succès).
+     *  - `message` (string) : Un message confirmant la création de la discussion.
+     *  - `data` (array) : Les détails de la discussion créée.
+     *
+     * @throws \Exception Si une erreur survient lors de la création de la discussion.
+     */
     public function createGroupDiscussion(Request $request)
     {
         try {
@@ -21,7 +42,7 @@ class DiscussionController extends Controller
                 'description' => 'nullable|string',
                 'picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5048',
                 'participants' => 'required|array|min:1', // Au moins une personne autre que le créateur
-                'participants.*' => 'exists:users,_id',
+                // 'participants.*' => 'exists:users,id',
                 'tags' => 'required|in:GROUPE',
             ], [
                 'name.required' => 'Le nom de la discussion est obligatoire.',
@@ -71,7 +92,7 @@ class DiscussionController extends Controller
 
             // Ajouter le créateur comme administrateur
             $participants->push([
-                'id' => $request->senderId,
+                'id' => auth()->id(),
                 'isSilent' => false,
                 'isArchived' => false,
                 'isDelected' => false,
@@ -128,9 +149,9 @@ class DiscussionController extends Controller
             }
 
             $currentUserId = auth()->id();
-            $currentUser = collect($discussion->participants)->filter(function($participant) use ($currentUserId) {
+            $currentUser = collect($discussion->participants)->filter(function ($participant) use ($currentUserId) {
                 return $participant['id'] == $currentUserId;
-            })->first();   
+            })->first();
 
             if (!$currentUser || !$currentUser['isAdmin']) {
                 return response()->json([
@@ -402,7 +423,6 @@ class DiscussionController extends Controller
                 'message' => 'Utilisateur nommé administrateur avec succès.',
                 'data' => $discussion,
             ], 200);
-
         } catch (Exception $e) {
             return response()->json([
                 'status_code' => 500,
@@ -456,7 +476,7 @@ class DiscussionController extends Controller
     public function listUnarchivedDiscussions()
     {
         try {
-            
+
             $currentUserId = auth()->id();
 
             // Récupérer les discussions où l'utilisateur est participant et non archivé
@@ -592,7 +612,6 @@ class DiscussionController extends Controller
                 'status_code' => 200,
                 'message' => 'Discussion supprimée avec succès pour l\'utilisateur.',
             ], 200);
-
         } catch (Exception $e) {
             return response()->json([
                 'status_code' => 500,
@@ -601,6 +620,4 @@ class DiscussionController extends Controller
             ], 500);
         }
     }
-
-
 }

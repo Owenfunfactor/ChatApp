@@ -10,7 +10,7 @@ class Discussion extends Model
     protected $collection = 'discussions';
 
     protected $fillable = [
-        'tags', 'participants', 'name', 'description', 'picture', 
+        'id','tags', 'participants', 'name', 'description', 'picture', 
         'createdAt', 'createdBy',
     ];
 

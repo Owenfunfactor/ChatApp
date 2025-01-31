@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ApiResponse;
 use App\Mail\RestPassword;
 use App\Mail\WelcomeUser;
-use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
@@ -19,6 +19,17 @@ use Illuminate\Support\Facades\Mail;
 class UserController extends Controller
 {
 
+    /**
+     * Vérifie l'authenticité d'un utilisateur via son token.
+     *
+     * Cette fonction récupère un utilisateur à partir de son ID et compare son token 
+     * avec celui fourni dans l'en-tête de la requête.
+     *
+     * @param Request $request La requête HTTP contenant le token d'authentification.
+     * @param string $id L'identifiant unique de l'utilisateur.
+     * 
+     * @return User|null Retourne l'utilisateur s'il est authentifié, sinon null.
+     */
     private function verifyUser(Request $request, string $id)
     {
         try {
@@ -26,7 +37,7 @@ class UserController extends Controller
             $user = User::find($id);
             //dd($user);
             if (!$user) {
-                return response()->json(['message' => 'Utilisateur non trouvé'], 404);
+                return null;
             }
 
             $token = $request->header('Authorization');
@@ -40,18 +51,41 @@ class UserController extends Controller
 
             return $user;
         } catch (\Exception $e) {
-            echo 'fail';
+            return null;
         }
+    }
+
+    /**
+     * Extrait et retourne le token Bearer de l'en-tête Authorization.
+     *
+     * Cette fonction récupère le token d'authentification envoyé dans l'en-tête HTTP
+     * sous la forme "Bearer {token}" et retourne uniquement le jeton.
+     *
+     * @param Request $request La requête HTTP contenant l'en-tête Authorization.
+     * 
+     * @return string|null Retourne le token sans le préfixe "Bearer ", ou null s'il est absent.
+     */
+    private static function getToken($request)
+    {
+        $token = $request->header('Authorization');
+        if ($token != null && str_starts_with($token, 'Bearer')) {
+            $token = substr($token, 7);
+        }
+        return $token;
     }
 
     /**
      * Enregistre un nouvel utilisateur dans la base de données.
      *
-     * @param Request $request L'objet de requête contenant les données fournies par le client.
+     * Cette fonction valide les données reçues, crée un nouvel utilisateur avec un mot de passe haché,
+     * génère un token de vérification, enregistre l'utilisateur en base et envoie un email de bienvenue.
      *
-     * @return JsonResponse Une réponse JSON indiquant le statut de l'opération.
+     * @param Request $request La requête HTTP contenant les informations de l'utilisateur.
      *
-     * @throws \Exception Si une erreur inattendue survient lors de l'exécution.
+     * @return JsonResponse Retourne une réponse JSON avec le statut de la requête :
+     *                      - 200 si l'utilisateur est créé avec succès.
+     *                      - 400 en cas d'erreur de validation.
+     *                      - 500 en cas d'erreur serveur.
      */
     public function register(Request $request)
     {
@@ -99,19 +133,16 @@ class UserController extends Controller
                 'rounds' => 12,
             ]);
             $user->verifyAd = null;
-            $user->verifyToken = null;
+            $user->verifyToken = Str::random(60);
             $user->tokenExpiredAt = null;
             $user->tokenExpiredAt = null;
-            $token = Str::random(60);
-            $user->token = $token;
             $user->save();
-
             // Envoie de mail
             Mail::to($user->email)->send(
                 new WelcomeUser(
                     $user->email,
                     $request->input('identity.fullName'),
-                    $user->token
+                    $user->verifyToken
                 )
             );
 
@@ -120,7 +151,6 @@ class UserController extends Controller
                 'error' => false,
                 'message' => 'Utilisateur créé avec succès',
                 'data' => $user,
-                "token" => $token
             ], 200);
         } catch (Exception $e) {
             return response()->json([
@@ -132,34 +162,32 @@ class UserController extends Controller
     }
 
     /**
-     * Vérifie l'email d'un utilisateur en utilisant un jeton (token).
+     * Méthode permettant de vérifier l'email d'un utilisateur via un token de vérification.
      *
-     * @param Request $request L'objet de requête contenant le jeton pour la vérification de l'email.
+     * Cette méthode recherche un utilisateur en fonction du token de vérification envoyé dans la requête.
+     * Si l'utilisateur existe et que le token est valide, son champ `verifyAd` (date de vérification de l'email) est mis à jour avec la date et l'heure actuelles.
+     * Si l'utilisateur n'est pas trouvé ou si le token est invalide, une erreur est renvoyée.
      *
-     * @return JsonResponse Une réponse JSON indiquant le statut de l'opération.
-     *
-     * @throws \Exception Si une erreur survient lors du traitement.
+     * @param Request $request La requête HTTP contenant le token de vérification dans les paramètres.
+     * 
+     * @return \Illuminate\Http\JsonResponse La réponse JSON indiquant si la vérification a été réussie ou échouée.
+     * 
+     * @throws \Exception Si une erreur se produit lors de la recherche ou de la mise à jour de l'utilisateur.
      */
     public function verifyEmail(Request $request)
     {
         try {
-            $user = User::where('token', $request->token)->first();
+            $user = User::where('verifyToken', $request->token)->first();
             if (!$user) {
                 return response()->json([
                     'message' => 'Pas d\'acces',
                 ]);
             }
 
-            $user->token = Str::random(60);
             $user->verifyAd = now();
             $user->save();
 
-            return response()->json([
-                'status_code' => 200,
-                'error' => false,
-                'message' => 'Email verifier avec succès',
-                "token" => $user->token
-            ], 200);
+            return ApiResponse::success();
         } catch (\Exception $e) {
             return response()->json([
                 'status_code' => 400,
@@ -169,13 +197,17 @@ class UserController extends Controller
     }
 
     /**
-     * Authentifie un utilisateur et retourne un jeton d'accès en cas de succès.
+     * Méthode permettant à un utilisateur de se connecter en utilisant son email et son mot de passe.
      *
-     * @param Request $request L'objet de requête contenant les informations d'authentification de l'utilisateur.
+     * Cette méthode valide les informations d'identification de l'utilisateur (email et mot de passe) et génère un token d'authentification si les identifiants sont corrects.
+     * Si l'authentification réussit, un token est renvoyé, ainsi que les informations de l'utilisateur. Le statut `isOnLine` de l'utilisateur est mis à jour à `true`.
+     * En cas d'échec, une erreur est renvoyée pour indiquer que l'email ou le mot de passe est incorrect.
      *
-     * @return JsonResponse Une réponse JSON contenant le statut, un message, et le jeton d'accès en cas de succès.
-     *
-     * @throws ValidationException Si les données de validation ne respectent pas les contraintes définies.
+     * @param Request $request La requête HTTP contenant les informations d'identification de l'utilisateur (email et mot de passe).
+     * 
+     * @return \Illuminate\Http\JsonResponse La réponse JSON contenant le token et les informations de l'utilisateur si l'authentification est réussie.
+     * 
+     * @throws \Illuminate\Validation\ValidationException Si les informations d'identification ne sont pas valides (email et mot de passe requis).
      */
     public function login(Request $request)
     {
@@ -190,23 +222,26 @@ class UserController extends Controller
 
         // Essayer de générer un token
         if (!$token = Auth::attempt($credentials)) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Email ou mot de passe incorrect.',
-            ], 401);
+            return ApiResponse::error("Email ou mot de passe incorrect.", null, 401);
         }
 
-        // Si tout est bon, retourner le token
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Connexion réussie.',
-            'token' => Auth::user()->token,
-            'user' => Auth::user(),
-        ], 200);
+        Auth::user()->isOnLine = true;
+        Auth::user()->save();
+        return ApiResponse::success(['token' => $token, "user" => Auth::user()], "Connexion réussie.");
     }
 
-    // Déconnexion
-    public function logout(Request $request, string $id)
+
+    /**
+     * Méthode permettant à un utilisateur de se déconnecter de l'application.
+     *
+     * Cette méthode déconnecte l'utilisateur en révoquant son token d'authentification et met à jour son statut `isOnLine` à `false`.
+     * En cas de succès, un message de déconnexion réussie est renvoyé. En cas d'erreur, un message d'erreur est retourné.
+     * 
+     * @return \Illuminate\Http\JsonResponse La réponse JSON indiquant si la déconnexion a réussi ou non.
+     *
+     * @throws \Exception Si une erreur se produit lors de la déconnexion.
+     */
+    public function logout()
     {
         $user = $this->verifyUser($request, $id);
         if ($user === null) {
@@ -217,49 +252,30 @@ class UserController extends Controller
         }
 
         try {
-            $user->isOnLine = false;
-            $user->token = null;
-            $user->save();
-            return response()->json([
-                'statut_code' => 200,
-                'message' => "Utilisateur deconnecter avec succes"
-            ]);
+            Auth::logout();
+            Auth::user()->isOnLine = false;
+            Auth::user()->save();
+            return ApiResponse::success(null, "Déconnexion réussie");
         } catch (\Exception $e) {
-            return response()->json([
-                'statut_code' => 500,
-                'message' => $e->getMessage()
-            ]);
+            return ApiResponse::error("Erreur lors de la déconnexion.", null, 500);
         }
     }
 
     /**
-     * Met à jour les informations du profil d'un utilisateur.
+     * Méthode permettant de mettre à jour les informations du profil de l'utilisateur.
      *
-     * @param Request $request La requête contenant les nouvelles informations du profil.
-     * @param int $id L'identifiant de l'utilisateur à mettre à jour.
-     * @return JsonResponse La réponse JSON contenant le statut de l'opération.
+     * Cette méthode permet à un utilisateur de mettre à jour ses informations personnelles telles que son nom complet, sa bio et sa photo de profil.
+     * Elle valide les données d'entrée, met à jour le profil de l'utilisateur authentifié, et génère un nouveau token d'authentification.
      *
-     * @throws \Exception En cas d'erreur serveur.
+     * @param \Illuminate\Http\Request $request Les données envoyées par le client pour la mise à jour du profil.
+     * 
+     * @return \Illuminate\Http\JsonResponse La réponse JSON avec le message de succès ou d'erreur.
+     *
+     * @throws \Exception Si une erreur se produit pendant la mise à jour du profil.
      */
-    public function updateUserProfileInfos(Request $request, $id)
+    public function updateUserProfileInfos(Request $request)
     {
         try {
-
-            $token = $request->header('Authorization');
-            if ($token && str_starts_with($token, 'Bearer ')) {
-                $token = substr($token, 7);
-            }
-
-            $user = User::find($id);
-            if (!$user) {
-                return response()->json(['message' => 'Utilisateur non trouvé'], 404);
-            }
-            if (!$user->token === $token) {
-                return response()->json([
-                    'message' => 'Token invalide.',
-                ], 403);
-            }
-
             $validator = Validator::make($request->all(), [
                 'identity.fullName' => 'required|string|max:255',
                 'identity.bio' => 'nullable|string',
@@ -267,51 +283,38 @@ class UserController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'status' => false,
-                    'errors' => $validator->errors(),
-                ], 422);
+                return ApiResponse::validation($validator->errors());
             }
 
+            $user = Auth::user();
             $user->identity = array_merge($user->identity, [
                 'fullName' => $request->input('identity.fullName'),
                 'bio' => $request->input('identity.bio', ''),
                 'picture' => $request->input('identity.picture', null),
             ]);
             $user->save();
+            $token = auth()->refresh();;
 
-            return response()->json([
-                'status' => true,
-                'message' => 'Profil mis à jour avec succès',
-                'data' => $user,
-            ], 200);
+            return ApiResponse::success(["token" => $token, "user" => Auth::user()], "Profil mis à jour avec succès");
         } catch (Exception $e) {
-            return response()->json([
-                'status' => false,
-                'message' => $e->getMessage(),
-            ], 500);
+            return ApiResponse::error("Une erreur est survenue.", $e->getMessage(), 500);
         }
     }
 
     /**
-     * Met à jour le mot de passe d'un utilisateur après vérification de l'ancien mot de passe.
+     * Méthode permettant de mettre à jour le mot de passe de l'utilisateur.
      *
-     * @param Request $request La requête contenant le mot de passe actuel et le nouveau mot de passe.
-     * @param string $id L'identifiant de l'utilisateur.
-     * @return JsonResponse La réponse JSON contenant le statut de l'opération.
+     * Cette méthode permet à un utilisateur authentifié de modifier son mot de passe en vérifiant d'abord que le mot de passe actuel
+     * est correct. Si c'est le cas, elle remplace le mot de passe existant par un nouveau mot de passe, et génère un nouveau token d'authentification.
      *
-     * @throws \Exception En cas d'erreur serveur.
+     * @param \Illuminate\Http\Request $request Les données envoyées par le client, contenant le mot de passe actuel et le nouveau mot de passe.
+     * 
+     * @return \Illuminate\Http\JsonResponse La réponse JSON avec le message de succès ou d'erreur.
+     *
+     * @throws \Illuminate\Validation\ValidationException Si les données ne respectent pas les règles de validation.
      */
-    public function updateUserPassword(Request $request, string $id)
+    public function updateUserPassword(Request $request)
     {
-        /* IDENTIFICATION DE L'UTILISATEUR */
-        $user = $this->verifyUser($request, $id);
-        if ($user === null) {
-            return response()->json([
-                'statut_code' => 500,
-                'message' => 'Utilisateur invalid'
-            ], 500);
-        }
         $validator = Validator::make($request->all(), [
             'current_password' => 'required|string',
             'new_password' => 'required|string|min:8',
@@ -325,67 +328,68 @@ class UserController extends Controller
         }
 
 
-        if (Hash::check($request->input('current_password'), $user->password)) {
-            $user->password = Hash::make($request->input('new_password'));
-            $user->token = $token = Str::random(60);
-            $user->save();
-
-            return response()->json(['message' => 'Mot de passe mis à jour avec succès', 'token' => $user->token], 200);
+        if (Hash::check($request->input('current_password'), Auth::user()->password)) {
+            Auth::user()->password = Hash::make($request->input('new_password'));
+            Auth::user()->save();
+            $token = UserController::getToken($request);
+            return ApiResponse::success([
+                "token" => $token,
+                "user" => Auth::user()
+            ], "Mot de passe modifié.");
         }
 
-        return response()->json(['message' => 'Le mot de passe actuel est incorrect'], 400);
+        return ApiResponse::error("Le mot de passe actuel est incorrect", null, 400);
     }
 
     /**
-     * Envoie un lien de réinitialisation du mot de passe à l'utilisateur.
+     * Méthode permettant renvoyer le liens pour la validation de son compte.
      *
-     * @param Request $request La requête contenant les données nécessaires.
-     * @param string $id L'identifiant de l'utilisateur.
-     * @return JsonResponse La réponse JSON indiquant le statut de l'opération.
+     * Cette méthode génère un nouveau token de vérification pour l'utilisateur,
+     * et envoie un email contenant le lien de verification. Le lien contient le token de vérification.
      *
-     * @throws \Exception En cas d'erreur lors de l'envoi de l'email.
+     * @param \Illuminate\Http\Request $request Les données envoyées par le client, contenant la token.
+     *
+     * @return \Illuminate\Http\JsonResponse La réponse JSON avec le message de succès ou d'erreur.
+     *
+     * @throws \Illuminate\Validation\ValidationException Si l'email n'est pas fourni ou est mal formé.
+     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException Si l'utilisateur avec l'email donné n'est pas trouvé.
      */
-    public function sendResetLink(Request $request, string $id)
+    public function sendResetLink(Request $request)
     {
         try {
-            $user = $this->verifyUser($request, $id);
-            if ($user === null) {
-                return response()->json([
-                    'statut_code' => 500,
-                    'message' => 'Utilisateur invalid'
-                ], 500);
-            }
-            $user->token = Str::random(60);
+            $validator = Validator::make($request->all(), [
+                'token' => 'required|string',
+            ]);
+            $user = User::where('verifyToken', $request->token)->first();
+            $user->verifyToken = Str::random(60);
             $user->save();
             Mail::to($user->email)->send(
                 new WelcomeUser(
                     $user->email,
                     $request->input('identity.fullName'),
-                    $user->token
+                    $user->verifyToken
                 )
             );
 
-            return response()->json([
-                'statut_code' => 200,
-                'token' => $user->token,
-                'message' => 'Email de verification renvoyer avec succes'
-            ], 200);
+            return ApiResponse::success(null, "Email de verification renvoyer avec succes");
         } catch (\Exception $e) {
-            return response()->json([
-                'statut_code' => 500,
-                'message' => $e->getMessage()
-            ], 500);
+            return ApiResponse::error($e->getMessage(), null, 500);
         }
     }
 
 
     /**
-     * Génère un token de réinitialisation et envoie un email à l'utilisateur pour réinitialiser son mot de passe.
+     * Méthode permettant de réinitialiser le mot de passe d'un utilisateur.
      *
-     * @param Request $request La requête contenant l'email de l'utilisateur.
-     * @return JsonResponse La réponse JSON indiquant le statut de l'opération.
+     * Cette méthode génère un nouveau token de vérification et l'envoie par email à l'utilisateur spécifié.
+     * Le lien dans l'email contient ce token pour permettre à l'utilisateur de réinitialiser son mot de passe.
      *
-     * @throws \Exception En cas d'erreur lors du traitement.
+     * @param \Illuminate\Http\Request $request Les données envoyées par le client, contenant l'email de l'utilisateur.
+     *
+     * @return \Illuminate\Http\JsonResponse La réponse JSON avec un message de succès ou d'erreur.
+     *
+     * @throws \Illuminate\Validation\ValidationException Si l'email n'est pas fourni ou est mal formé.
+     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException Si l'utilisateur avec l'email donné n'est pas trouvé.
      */
     public function resetPassword(Request $request)
     {
@@ -400,25 +404,20 @@ class UserController extends Controller
 
         try {
             $user = User::where('email', $request->email)->first();
-            $user->token = Str::random(60);
+            if (!$user) {
+                return ApiResponse::error("Utilisateur invalid", null, 401);
+            }
+            $user->verifyAd = Str::random(60);
             $user->save();
             Mail::to($user->email)->send(new RestPassword(
                 $user->email,
                 $user->identity['fullName'],
-                $user->token
+                $user->verifyAd
             ));
 
-            return response()->json([
-                'statut_code' => 200,
-                'user' => $user,
-                'token' => $user->token,
-                'message' => 'Email de verification renvoyer avec succes'
-            ], 200);
+            return ApiResponse::success(null, "Email de verification renvoyer avec succes");
         } catch (\Exception $e) {
-            return response()->json([
-                'statut_code' => 500,
-                'message' => $e->getMessage()
-            ], 500);
+            return ApiResponse::error($e->getMessage(), null, 500);
         }
     }
 
@@ -439,13 +438,19 @@ class UserController extends Controller
     }
 
     /**
-     * Désactive le compte d'un utilisateur après vérification du mot de passe.
+     * Méthode permettant de désactiver le compte d'un utilisateur.
      *
-     * @param Request $request La requête HTTP contenant le mot de passe de l'utilisateur.
-     * @param string $id L'identifiant unique de l'utilisateur.
-     * @return JsonResponse Réponse JSON contenant le statut et un message.
+     * Cette méthode désactive le compte de l'utilisateur en vérifiant le mot de passe fourni. 
+     * Si le mot de passe est valide, elle marque l'utilisateur comme non activé et le déconnecte.
+     *
+     * @param \Illuminate\Http\Request $request Les données envoyées par le client, contenant le mot de passe de l'utilisateur.
+     *
+     * @return \Illuminate\Http\JsonResponse La réponse JSON avec un message de succès ou d'erreur.
+     *
+     * @throws \Illuminate\Validation\ValidationException Si le mot de passe n'est pas fourni.
+     * @throws \Illuminate\Auth\AuthenticationException Si le mot de passe est incorrect.
      */
-    public function desactivateAccount(Request $request, string $id)
+    public function desactivateAccount(Request $request)
     {
         // Validation des données entrées par l'utilisateur
         $validator = Validator::make($request->all(), [
@@ -453,64 +458,46 @@ class UserController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['error' => $validator->errors()], 422);
+            return ApiResponse::error('Impossible d\'effectuer cette action', $validator->errors(), 500);
         }
 
-        $user = $this->verifyUser($request, $id);
-
-        if (!$user) {
-            return response()->json(['message' => 'Aucun utilisateur trouver'], 500);
-        }
-
-        if (!Hash::check($request->password, $user->password)) {
-            return response()->json(['message' => 'Impossible d\'effectuer cette action'], 500);
+        if (!Hash::check($request->password, Auth::user()->password)) {
+            return ApiResponse::error('Impossible d\'effectuer cette action', null, 500);
         };
 
         try {
-            $user->isActivated = false;
-            $user->token = null;
-            $user->save();
+            Auth::user()->isActivated = false;
+            Auth::user()->isOnLine = false;
+            Auth::user()->save();
+            Auth::logout();
 
-            return response()->json([
-                'statut_code' => 200,
-                'user' => $user,
-                'token' => $user->token,
-                'message' => 'Compte desactiver'
-            ], 200);
+            return ApiResponse::success(Auth::user(), "Compte desactiver");
         } catch (\Exception $e) {
-            return response()->json([
-                'statut_code' => 500,
-                'message' => $e->getMessage()
-            ], 500);
+            return ApiResponse::error($e->getMessage(), "Une erreur s'est produite", 500);
         }
     }
 
     /**
-     * Désactive le compte d'un utilisateur après vérification du mot de passe.
+     * Méthode permettant de récupérer les informations de l'utilisateur actuellement connecté.
      *
-     * @param Request $request La requête HTTP contenant le mot de passe de l'utilisateur.
-     * @param string $id L'identifiant unique de l'utilisateur.
-     * @return JsonResponse Réponse JSON contenant le statut et un message.
+     * Cette méthode retourne les détails de l'utilisateur authentifié, y compris son profil
+     * et un nouveau token d'authentification. 
+     *
+     * @param \Illuminate\Http\Request $request Les données envoyées par le client.
+     *
+     * @return \Illuminate\Http\JsonResponse La réponse JSON contenant les informations de l'utilisateur et un nouveau token.
+     *
+     * @throws \Throwable Si une erreur imprévue se produit pendant le traitement de la requête.
      */
-    public function me(Request $request, string $id)
+    public function me(Request $request)
     {
         try {
-            $user = $this->verifyUser($request, $id);
-
-            if (!$user) {
-                return response()->json(['message' => 'Aucun utilisateur trouver'], 500);
-            }
-
-            return response()->json([
-                'statut_code' => 200,
-                'user' => $user,
-                'token' => $user->token,
-            ], 200);
+            return ApiResponse::success([
+                'user' => Auth::user(),
+                'token' => UserController::getToken($request),
+            ]);
         } catch (\Throwable $e) {
-            return response()->json([
-                'statut_code' => 500,
-                'message' => $e->getMessage()
-            ], 500);
+            return ApiResponse::error($e->getMessage());
         }
     }
 }

@@ -41,7 +41,7 @@ class ContactController extends Controller
     public function sendContactRequest(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'idUser2' => 'required|exists:users,_id',
+            'idUser2' => 'required|exists:users,id',
         ], [
             'idUser2.required' => 'L\'identifiant de l\'utilisateur est requis.',
             'idUser2.exists' => 'L\'utilisateur spécifié n\'existe pas.',
