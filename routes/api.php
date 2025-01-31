@@ -19,7 +19,7 @@ Route::get('/user', function (Request $request) {
 // Routes publiques (pas besoin de token)
 Route::post('register', [UserController::class, 'register']);
 Route::get('verify-email', [UserController::class, 'verifyEmail']);
-Route::get('send-reset-link/{user}', [UserController::class, 'sendResetLink']);
+Route::get('send-reset-link', [UserController::class, 'sendResetLink']);
 Route::post('reset-password/', [UserController::class, 'resetPassword']);
 Route::post('login', [UserController::class, 'login'])->name('login');
 
