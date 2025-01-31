@@ -230,6 +230,7 @@ class UserController extends Controller
         return ApiResponse::success(['token' => $token, "user" => Auth::user()], "Connexion réussie.");
     }
 
+
     /**
      * Méthode permettant à un utilisateur de se déconnecter de l'application.
      *
@@ -242,6 +243,14 @@ class UserController extends Controller
      */
     public function logout()
     {
+        $user = $this->verifyUser($request, $id);
+        if ($user === null) {
+            return response()->json([
+                'statut_code' => 500,
+                'message' => "Impossible d'effectuer cette action"
+            ]);
+        }
+
         try {
             Auth::logout();
             Auth::user()->isOnLine = false;

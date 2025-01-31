@@ -24,7 +24,8 @@ Route::post('reset-password/', [UserController::class, 'resetPassword']);
 Route::post('login', [UserController::class, 'login'])->name('login');
 
 
-// Users
+
+
 Route::get('/user', [UserController::class, 'me'])->middleware('auth')->middleware('auth');
 Route::patch('/user/update-profile', [UserController::class, 'updateUserProfileInfos'])->middleware('auth');
 Route::patch('/user/update-password', [UserController::class, 'updateUserPassword'])->middleware('auth');
